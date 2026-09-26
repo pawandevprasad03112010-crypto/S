@@ -1,50 +1,76 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Property Search - Housing Style</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Search - Real Estate</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; }
-        .search-container { max-width: 700px; margin: 40px auto; position: relative; text-align: center; }
-        .search-box { display: flex; gap: 10px; }
-        input[type="text"] { flex: 1; padding: 12px 15px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; outline: none; }
-        button { padding: 12px 25px; background: #d93838; color: white; border: none; font-size: 16px; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #b52b2b; }
-        
-        .suggestions { position: absolute; top: 92px; left: 0; right: 90px; background: white; border: 1px solid #ccc; border-top: none; z-index: 10; max-height: 200px; overflow-y: auto; text-align: left; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .suggestion-item { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #eee; }
-        .suggestion-item:hover { background: #f0f0f0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #f8f9fa; color: #333; padding-bottom: 40px; }
 
-        .results-wrapper { max-width: 900px; margin: 20px auto; }
-        .listing-count { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 15px; display: none; }
+        /* Header / Search Section */
+        .hero-section { background: linear-gradient(135deg, #1e293b, #0f172a); padding: 40px 20px; text-align: center; color: white; margin-bottom: 30px; }
+        .hero-section h2 { margin-bottom: 20px; font-size: 26px; font-weight: 600; }
+        .search-container { max-width: 700px; margin: 0 auto; position: relative; }
+        .search-box { display: flex; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+        input[type="text"] { flex: 1; padding: 15px 20px; font-size: 16px; border: none; outline: none; color: #333; }
+        button.search-btn { padding: 0 30px; background: #e11d48; color: white; border: none; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        button.search-btn:hover { background: #be123c; }
 
-        .property-card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; overflow: hidden; cursor: pointer; transition: transform 0.2s; }
-        .property-card:hover { transform: translateY(-3px); }
-        
-        .card-images { width: 350px; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; flex-shrink: 0; background: #000; }
-        .card-images::-webkit-scrollbar { height: 6px; }
-        .card-images::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.5); border-radius: 3px; }
-        .card-images img { width: 350px; height: 230px; object-fit: cover; scroll-snap-align: start; flex-shrink: 0; }
-        
+        /* Auto-suggestions */
+        .suggestions { position: absolute; top: 60px; left: 0; right: 120px; background: white; border-radius: 0 0 8px 8px; z-index: 100; max-height: 220px; overflow-y: auto; text-align: left; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+        .suggestion-item { padding: 12px 20px; cursor: pointer; border-bottom: 1px solid #f1f5f9; color: #1e293b; font-size: 14px; }
+        .suggestion-item:hover { background: #f1f5f9; color: #e11d48; font-weight: 500; }
+
+        /* Main Results Container */
+        .main-container { max-width: 900px; margin: 0 auto; padding: 0 15px; }
+        .listing-count { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 20px; display: none; border-left: 4px solid #e11d48; padding-left: 10px; }
+
+        /* Property Card */
+        .property-card { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 25px; display: flex; flex-direction: row; overflow: hidden; border: 1px solid #e2e8f0; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+        .property-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,0,0,0.12); }
+
+        /* Horizontal Image Scroll Container */
+        .card-images-wrapper { width: 340px; position: relative; flex-shrink: 0; background: #000; }
+        .card-images { width: 340px; height: 240px; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+        .card-images::-webkit-scrollbar { display: none; } /* Scrollbar hide for clean look */
+        .card-images img { width: 340px; height: 240px; object-fit: cover; scroll-snap-align: start; flex-shrink: 0; }
+
+        /* Scroll Hint Arrows/Indicator inside Image */
+        .scroll-hint { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; font-size: 11px; padding: 3px 8px; border-radius: 4px; pointer-events: none; }
+
+        /* Card Content */
         .card-content { padding: 20px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
-        .price { font-size: 24px; font-weight: bold; color: #d93838; }
-        .title { font-size: 18px; font-weight: bold; margin: 5px 0; color: #333; }
-        .location { color: #666; font-size: 14px; margin-bottom: 10px; }
-        .specs { display: flex; gap: 15px; font-size: 14px; color: #555; background: #f9f9f9; padding: 10px; border-radius: 4px; }
+        .price { font-size: 26px; font-weight: 700; color: #e11d48; margin-bottom: 4px; }
+        .title { font-size: 18px; font-weight: 600; color: #1e293b; margin-bottom: 8px; }
+        .location { color: #64748b; font-size: 14px; margin-bottom: 15px; display: flex; align-items: center; gap: 5px; }
+        
+        .specs { display: flex; gap: 12px; font-size: 13px; color: #475569; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .specs div { flex: 1; text-align: center; border-right: 1px solid #cbd5e1; }
+        .specs div:last-child { border-right: none; }
+        .specs b { display: block; color: #0f172a; font-size: 14px; margin-top: 2px; }
+
+        /* Responsive design for mobiles */
+        @media (max-width: 768px) {
+            .property-card { flex-direction: column; }
+            .card-images-wrapper, .card-images, .card-images img { width: 100%; height: 220px; }
+        }
     </style>
 </head>
 <body>
 
-<div class="search-container">
-    <h2>अपनी मनपसंद प्रॉपर्टी या लोकेशन खोजें</h2>
-    <div class="search-box">
-        <input type="text" id="searchQuery" placeholder="लोकेशन दर्ज करें (उदा. Chembur, Mumbai)..." autocomplete="off">
-        <button onclick="performSearch()">सर्च</button>
+<div class="hero-section">
+    <h2>Find Your Dream Property</h2>
+    <div class="search-container">
+        <div class="search-box">
+            <input type="text" id="searchQuery" placeholder="Search locality, city or project (e.g. Chembur, Mumbai)..." autocomplete="off">
+            <button class="search-btn" onclick="performSearch()">Search</button>
+        </div>
+        <div id="suggestions" class="suggestions"></div>
     </div>
-    <div id="suggestions" class="suggestions"></div>
 </div>
 
-<div class="results-wrapper">
+<div class="main-container">
     <div id="listingCount" class="listing-count"></div>
     <div id="resultsContainer"></div>
 </div>
@@ -55,37 +81,49 @@
     const resultsContainer = document.getElementById('resultsContainer');
     const listingCountEl = document.getElementById('listingCount');
 
+    // Load all properties on page load
     window.onload = () => { performSearch(); };
 
+    // Live search auto-suggestions
     searchInput.addEventListener('input', async function() {
         const query = this.value.trim();
         if (query.length < 2) {
             suggestionsBox.innerHTML = '';
             return;
         }
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
-        
-        suggestionsBox.innerHTML = '';
-        data.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'suggestion-item';
-            div.innerText = `${item.location.locality}, ${item.location.city} - (${item.title})`;
-            div.onclick = () => {
-                searchInput.value = item.location.locality;
-                suggestionsBox.innerHTML = '';
-                displayResults(data);
-            };
-            suggestionsBox.appendChild(div);
-        });
+        try {
+            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            
+            suggestionsBox.innerHTML = '';
+            data.forEach(item => {
+                const loc = item.location || {};
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.innerText = `${loc.locality || ''}, ${loc.city || ''} - (${item.title || 'Property'})`;
+                div.onclick = () => {
+                    searchInput.value = loc.locality || loc.city || '';
+                    suggestionsBox.innerHTML = '';
+                    displayResults(data);
+                };
+                suggestionsBox.appendChild(div);
+            });
+        } catch (err) {
+            console.error("Search error:", err);
+        }
     });
 
     async function performSearch() {
         const query = searchInput.value.trim();
         suggestionsBox.innerHTML = '';
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
-        displayResults(data);
+        try {
+            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            displayResults(data);
+        } catch (err) {
+            console.error("Fetch error:", err);
+            resultsContainer.innerHTML = '<p style="text-align:center; color: #e11d48;">Error loading properties. Please try again.</p>';
+        }
     }
 
     function displayResults(data) {
@@ -94,38 +132,51 @@
         listingCountEl.innerText = `${data.length} Properties Found`;
 
         if (data.length === 0) {
-            resultsContainer.innerHTML = '<p style="text-align:center; color: #777;">कोई प्रॉपर्टी नहीं मिली।</p>';
+            resultsContainer.innerHTML = '<p style="text-align:center; color: #64748b; padding: 40px;">No properties found matching your search.</p>';
             return;
         }
 
         data.forEach(item => {
             let imagesHtml = '';
-            if(item.images && Array.isArray(item.images)) {
-                item.images.forEach(img => {
-                    imagesHtml += `<img src="${img}" alt="Property Image">`;
+            const images = item.media && item.media.images ? item.media.images : (item.images || []);
+            
+            if (Array.isArray(images) && images.length > 0) {
+                images.forEach(img => {
+                    imagesHtml += `<img src="${img}" alt="Property Image" onerror="this.src='https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600'">`;
                 });
+            } else {
+                imagesHtml = `<img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600" alt="Default Image">`;
             }
+
+            const specs = item.specifications || {};
+            const pricing = item.pricing || {};
+            const location = item.location || {};
 
             const card = document.createElement('div');
             card.className = 'property-card';
+            
+            // Card click handler: redirects to detail page unless user is dragging/scrolling images
             card.onclick = (e) => {
-                if(e.target.tagName !== 'IMG') {
+                if (!e.target.closest('.card-images')) {
                     window.location.href = `/property/${item.property_id}`;
                 }
             };
 
             card.innerHTML = `
-                <div class="card-images">${imagesHtml}</div>
+                <div class="card-images-wrapper">
+                    <div class="card-images">${imagesHtml}</div>
+                    <div class="scroll-hint">↔ Swipe Images</div>
+                </div>
                 <div class="card-content">
                     <div>
-                        <div class="price">${item.pricing ? item.pricing.price_display : ''}</div>
-                        <div class="title">${item.specifications ? item.specifications.bhk_type : ''} Flat for Sale in ${item.title}</div>
-                        <div class="location">📍 ${item.location ? item.location.full_address : ''}</div>
+                        <div class="price">${pricing.price_display || 'Price on Request'}</div>
+                        <div class="title">${specs.bhk_type || 'Residential'} Apartment in ${item.title || 'Exclusive Project'}</div>
+                        <div class="location">📍 ${location.full_address || location.locality || 'Prime Location'}</div>
                     </div>
                     <div class="specs">
-                        <div><b>${item.specifications ? item.specifications.carpet_sqft : ''}</b> sqft</div>
-                        <div><b>${item.specifications ? item.specifications.furnishing_status : ''}</b></div>
-                        <div>Floor: <b>${item.specifications ? item.specifications.floor_no : ''}/${item.specifications ? item.specifications.total_floors : ''}</b></div>
+                        <div>Area <b>${specs.carpet_sqft || specs.builtup_sqft || 'N/A'} sqft</b></div>
+                        <div>Furnishing <b>${specs.furnishing_status || 'N/A'}</b></div>
+                        <div>Floor <b>${specs.floor_no !== undefined ? specs.floor_no : 'N/A'}/${specs.total_floors || 'N/A'}</b></div>
                     </div>
                 </div>
             `;
