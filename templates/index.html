@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <title>Property Search - Housing Style</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; }
+        .search-container { max-width: 700px; margin: 40px auto; position: relative; text-align: center; }
+        .search-box { display: flex; gap: 10px; }
+        input[type="text"] { flex: 1; padding: 12px 15px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; outline: none; }
+        button { padding: 12px 25px; background: #d93838; color: white; border: none; font-size: 16px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #b52b2b; }
+        
+        .suggestions { position: absolute; top: 92px; left: 0; right: 90px; background: white; border: 1px solid #ccc; border-top: none; z-index: 10; max-height: 200px; overflow-y: auto; text-align: left; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .suggestion-item { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #eee; }
+        .suggestion-item:hover { background: #f0f0f0; }
+
+        .results-wrapper { max-width: 900px; margin: 20px auto; }
+        .listing-count { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 15px; display: none; }
+
+        .property-card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; overflow: hidden; cursor: pointer; transition: transform 0.2s; }
+        .property-card:hover { transform: translateY(-3px); }
+        
+        .card-images { width: 350px; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; flex-shrink: 0; background: #000; }
+        .card-images::-webkit-scrollbar { height: 6px; }
+        .card-images::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.5); border-radius: 3px; }
+        .card-images img { width: 350px; height: 230px; object-fit: cover; scroll-snap-align: start; flex-shrink: 0; }
+        
+        .card-content { padding: 20px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .price { font-size: 24px; font-weight: bold; color: #d93838; }
+        .title { font-size: 18px; font-weight: bold; margin: 5px 0; color: #333; }
+        .location { color: #666; font-size: 14px; margin-bottom: 10px; }
+        .specs { display: flex; gap: 15px; font-size: 14px; color: #555; background: #f9f9f9; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="search-container">
+    <h2>अपनी मनपसंद प्रॉपर्टी या लोकेशन खोजें</h2>
+    <div class="search-box">
+        <input type="text" id="searchQuery" placeholder="लोकेशन दर्ज करें (उदा. Chembur, Mumbai)..." autocomplete="off">
+        <button onclick="performSearch()">सर्च</button>
+    </div>
+    <div id="suggestions" class="suggestions"></div>
+</div>
+
+<div class="results-wrapper">
+    <div id="listingCount" class="listing-count"></div>
+    <div id="resultsContainer"></div>
+</div>
+
+<script>
+    const searchInput = document.getElementById('searchQuery');
+    const suggestionsBox = document.getElementById('suggestions');
+    const resultsContainer = document.getElementById('resultsContainer');
+    const listingCountEl = document.getElementById('listingCount');
+
+    window.onload = () => { performSearch(); };
+
+    searchInput.addEventListener('input', async function() {
+        const query = this.value.trim();
+        if (query.length < 2) {
+            suggestionsBox.innerHTML = '';
+            return;
+        }
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        
+        suggestionsBox.innerHTML = '';
+        data.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'suggestion-item';
+            div.innerText = `${item.location.locality}, ${item.location.city} - (${item.title})`;
+            div.onclick = () => {
+                searchInput.value = item.location.locality;
+                suggestionsBox.innerHTML = '';
+                displayResults(data);
+            };
+            suggestionsBox.appendChild(div);
+        });
+    });
+
+    async function performSearch() {
+        const query = searchInput.value.trim();
+        suggestionsBox.innerHTML = '';
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        displayResults(data);
+    }
+
+    function displayResults(data) {
+        resultsContainer.innerHTML = '';
+        listingCountEl.style.display = 'block';
+        listingCountEl.innerText = `${data.length} Properties Found`;
+
+        if (data.length === 0) {
+            resultsContainer.innerHTML = '<p style="text-align:center; color: #777;">कोई प्रॉपर्टी नहीं मिली।</p>';
+            return;
+        }
+
+        data.forEach(item => {
+            let imagesHtml = '';
+            if(item.images && Array.isArray(item.images)) {
+                item.images.forEach(img => {
+                    imagesHtml += `<img src="${img}" alt="Property Image">`;
+                });
+            }
+
+            const card = document.createElement('div');
+            card.className = 'property-card';
+            card.onclick = (e) => {
+                if(e.target.tagName !== 'IMG') {
+                    window.location.href = `/property/${item.property_id}`;
+                }
+            };
+
+            card.innerHTML = `
+                <div class="card-images">${imagesHtml}</div>
+                <div class="card-content">
+                    <div>
+                        <div class="price">${item.pricing ? item.pricing.price_display : ''}</div>
+                        <div class="title">${item.specifications ? item.specifications.bhk_type : ''} Flat for Sale in ${item.title}</div>
+                        <div class="location">📍 ${item.location ? item.location.full_address : ''}</div>
+                    </div>
+                    <div class="specs">
+                        <div><b>${item.specifications ? item.specifications.carpet_sqft : ''}</b> sqft</div>
+                        <div><b>${item.specifications ? item.specifications.furnishing_status : ''}</b></div>
+                        <div>Floor: <b>${item.specifications ? item.specifications.floor_no : ''}/${item.specifications ? item.specifications.total_floors : ''}</b></div>
+                    </div>
+                </div>
+            `;
+            resultsContainer.appendChild(card);
+        });
+    }
+</script>
+
+</body>
+</html>
