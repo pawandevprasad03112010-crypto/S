@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: property-search-app
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app
+    plan: free
+    envVars:
+      - key: AWS_Region
+        value: ap-south-1
+      - key: Table_Name
+        value: BUY_PROPERTY
+      - key: AWS_Access_Key_ID
+        value: AKIA32VVAONMTGEJMYPW
+      - key: AWS_Secret_Access_Key
+        value: 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
