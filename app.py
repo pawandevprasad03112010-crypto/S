@@ -54,12 +54,15 @@ def search_properties():
         city = str(loc.get('city', '')).lower()
         full_address = str(loc.get('full_address', '')).lower()
         title = str(prop.get('title', '')).lower()
+        property_id = str(prop.get('property_id', '')).lower() # Property ID को भी स्ट्रिंग में बदला
         
+        # अब सर्च में property_id भी शामिल है
         if (not query or 
             query in locality or 
             query in city or 
             query in full_address or 
-            query in title):
+            query in title or
+            query in property_id):
             results.append(prop)
             
     return jsonify(results)
