@@ -27,13 +27,16 @@
         .listing-count { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 20px; display: none; border-left: 4px solid #e11d48; padding-left: 10px; }
 
         /* Property Card */
-        .property-card { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 25px; display: flex; flex-direction: row; overflow: hidden; border: 1px solid #e2e8f0; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+        .property-card { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 25px; display: flex; flex-direction: row; overflow: hidden; border: 1px solid #e2e8f0; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; position: relative; }
         .property-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,0,0,0.12); }
+
+        /* Property ID Badge */
+        .property-id-badge { position: absolute; top: 12px; left: 12px; background: rgba(15, 23, 42, 0.85); color: white; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 4px; z-index: 10; letter-spacing: 0.5px; }
 
         /* Horizontal Image Scroll Container */
         .card-images-wrapper { width: 340px; position: relative; flex-shrink: 0; background: #000; }
         .card-images { width: 340px; height: 240px; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
-        .card-images::-webkit-scrollbar { display: none; } /* Scrollbar hide for clean look */
+        .card-images::-webkit-scrollbar { display: none; }
         .card-images img { width: 340px; height: 240px; object-fit: cover; scroll-snap-align: start; flex-shrink: 0; }
 
         /* Scroll Hint Arrows/Indicator inside Image */
@@ -100,7 +103,7 @@
                 const loc = item.location || {};
                 const div = document.createElement('div');
                 div.className = 'suggestion-item';
-                div.innerText = `${loc.locality || ''}, ${loc.city || ''} - (${item.title || 'Property'})`;
+                div.innerText = `${loc.locality || ''}, ${loc.city || ''} - (${item.title || 'Property'}) [ID: ${item.property_id || 'N/A'}]`;
                 div.onclick = () => {
                     searchInput.value = loc.locality || loc.city || '';
                     suggestionsBox.innerHTML = '';
@@ -151,18 +154,21 @@
             const specs = item.specifications || {};
             const pricing = item.pricing || {};
             const location = item.location || {};
+            const propertyId = item.property_id || 'N/A';
 
             const card = document.createElement('div');
             card.className = 'property-card';
+            card.setAttribute('data-property-id', propertyId); // DOM element में भी attribute जोड़ दिया है
             
             // Card click handler: redirects to detail page unless user is dragging/scrolling images
             card.onclick = (e) => {
                 if (!e.target.closest('.card-images')) {
-                    window.location.href = `/property/${item.property_id}`;
+                    window.location.href = `/property/${propertyId}`;
                 }
             };
 
             card.innerHTML = `
+                <div class="property-id-badge">ID: ${propertyId}</div>
                 <div class="card-images-wrapper">
                     <div class="card-images">${imagesHtml}</div>
                     <div class="scroll-hint">↔ Swipe Images</div>
