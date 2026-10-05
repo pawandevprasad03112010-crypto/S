@@ -1,26 +1,37 @@
 import os
-import boto3
+import json
 from decimal import Decimal
 from flask import Flask, render_template, request, jsonify
+import boto3
 
 app = Flask(__name__)
 
-# AWS Credentials and Configuration
-AWS_REGION = os.environ.get("AWS_Region", "ap-south-1")
-TABLE_NAME = os.environ.get("Table_Name", "BUY_PROPERTY")
-AWS_ACCESS_KEY_ID = os.environ.get("AWS_Access_Key_ID", "AKIA32VVAONMTGEJMYPW")
-AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_Secret_Access_Key", "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")
+# AWS Configuration using Environment Variables
+# Agar environment variable set nahi hai, toh default region 'ap-south-1' use hoga
+AWS_REGION = os.environ.get("AWS_REGION", "ap-south-1")
+TABLE_NAME = os.environ.get("TABLE_NAME", "BUY_PROPERTY")
 
-dynamodb = boto3.resource(
-    'dynamodb',
-    region_name=AWS_REGION,
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY
-)
+# Best Practice: Access Key aur Secret Key ko hardcode na karein.
+# Boto3 apne aap environment variables (AWS_ACCESS_KEY_ID aur AWS_SECRET_ACCESS_KEY) 
+# ya EC2/Lambda IAM Roles se credentials utha leta hai.
+aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
+aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+
+# DynamoDB Resource initialization
+if aws_access_key_id and aws_secret_access_key:
+    dynamodb = boto3.resource(
+        'dynamodb',
+        region_name=AWS_REGION,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key
+    )
+else:
+    # Agar keys explicitly pass nahi karni, toh boto3 default credential chain use karega
+    dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
 
 table = dynamodb.Table(TABLE_NAME)
 
-# DynamoDB के Decimal डेटा को JSON में बदलने के लिए हेल्पर फंक्शन
+# DynamoDB ke Decimal डेटा को JSON में बदलने के लिए हेल्पर फंक्शन
 def decimal_default(obj):
     if isinstance(obj, Decimal):
         return float(obj) if obj % 1 != 0 else int(obj)
@@ -31,7 +42,6 @@ def get_all_properties():
         response = table.scan()
         items = response.get('Items', [])
         # Decimal वैल्यूज को सामान्य नंबर में बदलना ताकि JSON एरर न आए
-        import json
         items_str = json.dumps(items, default=decimal_default)
         return json.loads(items_str)
     except Exception as e:
@@ -54,9 +64,8 @@ def search_properties():
         city = str(loc.get('city', '')).lower()
         full_address = str(loc.get('full_address', '')).lower()
         title = str(prop.get('title', '')).lower()
-        property_id = str(prop.get('property_id', '')).lower() # Property ID को भी स्ट्रिंग में बदला
+        property_id = str(prop.get('property_id', '')).lower()
         
-        # अब सर्च में property_id भी शामिल है
         if (not query or 
             query in locality or 
             query in city or 
