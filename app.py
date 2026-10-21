@@ -4,6 +4,7 @@ import io
 import json
 import uuid
 import asyncio
+from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor
 import boto3
 from fastapi import FastAPI, UploadFile, File, Request, HTTPException
@@ -22,14 +23,16 @@ PRIMARY_KEY = "property_id"
 
 executor = ThreadPoolExecutor(max_workers=20)
 
-def remove_none_values(d):
-    """ DynamoDB के लिए dictionary से None (null) वैल्यूज़ को हटाने का फंक्शन """
-    if isinstance(d, dict):
-        return {k: remove_none_values(v) for k, v in d.items() if v is not None}
-    elif isinstance(d, list):
-        return [remove_none_values(v) for v in d if v is not None]
+def clean_and_convert_data(obj):
+    """ None (null) वैल्यूज़ को हटाना और float को DynamoDB के लिए Decimal में बदलना """
+    if isinstance(obj, list):
+        return [clean_and_convert_data(v) for v in obj if v is not None]
+    elif isinstance(obj, dict):
+        return {k: clean_and_convert_data(v) for k, v in obj.items() if v is not None}
+    elif isinstance(obj, float):
+        return Decimal(str(obj))
     else:
-        return d
+        return obj
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -54,8 +57,8 @@ async def parse_zip(zippfile: UploadFile = File(...)):
                             prop_id = filename.split('_')[1].split('.')[0] if '_' in filename else str(uuid.uuid4())
                             data[PRIMARY_KEY] = prop_id
 
-                        # None (null) वैल्यूज़ को साफ़ करना ताकि DynamoDB एरर न दे
-                        cleaned_data = remove_none_values(data)
+                        # डेटा को पूरी तरह साफ़ करना (None हटाना और float को Decimal बनाना)
+                        cleaned_data = clean_and_convert_data(data)
 
                         listings.append({
                             "filename": filename,
