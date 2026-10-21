@@ -3,132 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Only Broker - DynamoDB Fast Bulk Uploader</title>
+    <title>Only Broker - Live DynamoDB Uploader</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen font-sans">
-    <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div class="container mx-auto px-4 py-8 max-w-5xl pb-24">
         <header class="bg-white shadow rounded-lg p-6 mb-8 text-center">
-            <h1 class="text-3xl font-bold text-gray-800">Only Broker - DynamoDB सुपरफास्ट अपलोडर</h1>
-            <p class="text-gray-600 mt-2">ज़िप फ़ाइल अपलोड करें, ऑटो-पार्सिंग देखें और एक क्लिक में DynamoDB में सेव करें।</p>
+            <h1 class="text-3xl font-bold text-gray-800">Only Broker - लाइव DynamoDB बल्क अपलोडर</h1>
+            <p class="text-gray-600 mt-2">अपनी सभी अलग-अलग JSON फाइलें चुनें और लाइव अपलोड होते हुए देखें।</p>
         </header>
 
-        <div class="bg-white shadow rounded-lg p-8 max-w-xl mx-auto mb-8">
-            <form id="upload-form" class="space-y-6">
-                <div>
-                    <label class="block text-lg font-medium text-gray-700 mb-2">लिस्टिंग ज़िप फ़ाइल चुनें (.zip)</label>
-                    <input type="file" id="zippfile" accept=".zip" required class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
-                </div>
-                <button type="submit" id="parse-btn" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition">फाइलों को स्कैन और पार्स करें</button>
-            </form>
+        <!-- File Selection Box -->
+        <div class="bg-white shadow rounded-lg p-8 mb-6 max-w-xl mx-auto">
+            <div class="space-y-4">
+                <label class="block text-lg font-medium text-gray-700">अपनी सभी JSON फाइलें चुनें (.json)</label>
+                <!-- multiple attribute से आप एक साथ सारी 149 फाइलें सेलेक्ट कर सकते हैं -->
+                <input type="file" id="json-files" name="files" accept=".json" multiple class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
+                
+                <button onclick="startLiveUpload()" id="upload-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition shadow-lg">डेटाबेस में लाइव अपलोड शुरू करें</button>
+            </div>
         </div>
 
-        <div id="result-section" class="hidden bg-white shadow rounded-lg p-6">
+        <!-- Live Status & List Section -->
+        <div id="status-section" class="hidden bg-white shadow rounded-lg p-6">
             <div class="flex justify-between items-center mb-4 border-b pb-3">
-                <h2 class="text-xl font-bold text-gray-800">स्कैन परिणाम (Scan Results)</h2>
-                <span id="total-count" class="bg-purple-100 text-purple-800 text-lg font-bold px-4 py-1 rounded-full">कुल लिस्टिंग: 0</span>
-            </div>
-            
-            <button onclick="uploadToDynamoDB()" id="upload-db-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition shadow-lg mb-6 text-lg">DynamoDB डेटाबेस में सभी अपलोड करें</button>
-
-            <div id="loading-spinner" class="hidden text-center py-4 text-purple-600 font-semibold">
-                डेटाबेस में अपलोड हो रहा है... कृपया प्रतीक्षा करें ⏳
+                <h2 class="text-xl font-bold text-gray-800">लाइव अपलोड प्रोग्रेस</h2>
+                <span id="counter-badge" class="bg-purple-100 text-purple-800 font-bold px-4 py-1 rounded-full text-sm">कुल फाइलें: 0</span>
             </div>
 
-            <div id="success-box" class="hidden bg-green-50 border border-green-200 rounded-lg p-4 mb-4 text-green-800 font-medium"></div>
-
-            <div>
-                <h3 class="font-bold text-gray-700 mb-2">अपलोड हुई प्रॉपर्टी आईडीज़ (Property IDs):</h3>
-                <div id="ids-container" class="bg-gray-50 border rounded-lg p-4 max-h-60 overflow-y-auto text-xs font-mono text-gray-600 space-y-1">
-                    <!-- IDs here -->
-                </div>
+            <div id="file-list-container" class="space-y-2 max-h-[500px] overflow-y-auto pr-2">
+                <!-- Live rows will appear here -->
             </div>
         </div>
     </div>
 
     <script>
-        let cachedListings = [];
-
-        document.getElementById('upload-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const fileInput = document.getElementById('zippfile');
-            if(fileInput.files.length === 0) return;
-
-            const formData = new FormData();
-            formData.append('zippfile', fileInput.files[0]);
-
-            const btn = document.getElementById('parse-btn');
-            btn.textContent = 'स्कैन हो रहा है...';
-            btn.disabled = true;
-
-            try {
-                const response = await fetch('/parse-zip', {
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await response.json();
-                
-                if(response.ok) {
-                    cachedListings = result.listings; // Global variable mein data save karna
-                    document.getElementById('total-count').textContent = `कुल लिस्टिंग: ${result.total}`;
-                    document.getElementById('result-section').classList.remove('hidden');
-                    
-                    const container = document.getElementById('ids-container');
-                    container.innerHTML = '';
-                    result.listings.forEach((item, idx) => {
-                        container.innerHTML += `<div>#${idx+1}: ${item.property_id} (${item.filename})</div>`;
-                    });
-                } else {
-                    alert('पार्सिंग असफल: ' + result.detail);
-                }
-            } catch(err) {
-                alert('त्रुटि: ' + err.message);
-            } finally {
-                btn.textContent = 'फाइलों को स्कैन और पार्स करें';
-                btn.disabled = false;
-            }
-        });
-
-        async function uploadToDynamoDB() {
-            if (!cachedListings || cachedListings.length === 0) {
-                alert('कोई लिस्टिंग उपलब्ध नहीं है। कृपया पहले ज़िप फाइल दोबारा अपलोड करें।');
+        async function startLiveUpload() {
+            const fileInput = document.getElementById('json-files');
+            if (fileInput.files.length === 0) {
+                alert('कृपया पहले कम से कम एक JSON फाइल चुनें!');
                 return;
             }
 
-            const btn = document.getElementById('upload-db-btn');
-            const spinner = document.getElementById('loading-spinner');
-            const successBox = document.getElementById('success-box');
-            
-            btn.disabled = true;
-            spinner.classList.remove('hidden');
-            successBox.classList.add('hidden');
+            const files = fileInput.files;
+            const container = document.getElementById('file-list-container');
+            const statusSection = document.getElementById('status-section');
+            const counterBadge = document.getElementById('counter-badge');
+            const uploadBtn = document.getElementById('upload-btn');
 
-            try {
-                const response = await fetch('/upload-dynamodb', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ listings: cachedListings })
-                });
+            container.innerHTML = '';
+            statusSection.classList.remove('hidden');
+            uploadBtn.disabled = true;
+            uploadBtn.classList.add('opacity-50');
+            counterBadge.textContent = `कुल फाइलें: ${files.length}`;
 
-                const result = await response.json();
-                if(response.ok) {
-                    successBox.textContent = result.message;
-                    successBox.classList.remove('hidden');
-
-                    const container = document.getElementById('ids-container');
-                    container.innerHTML = '<div class="text-green-600 font-bold mb-2">✓ DynamoDB में सफलतापूर्वक सेव हुई आईडीज़:</div>';
-                    result.saved_ids.forEach((id, idx) => {
-                        container.innerHTML += `<div class="text-green-700">✔ ${idx+1}. ${id}</div>`;
-                    });
-                } else {
-                    alert('अपलोड असफल: ' + (result.detail || 'अज्ञात त्रुटि'));
-                }
-            } catch(err) {
-                alert('त्रुटि: ' + err.message);
-            } finally {
-                spinner.classList.add('hidden');
-                btn.disabled = false;
+            // Create UI rows for each file
+            const fileRows = [];
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const rowId = `file-row-${i}`;
+                container.innerHTML += `
+                    <div id="${rowId}" class="flex items-center justify-between p-3 bg-gray-50 border rounded-lg text-sm">
+                        <div class="truncate w-1/2 font-mono text-gray-700">${file.name}</div>
+                        <div class="text-xs text-gray-500 property-id-text">ID: स्कैन हो रहा है...</div>
+                        <div class="status-badge px-3 py-1 rounded text-xs font-bold bg-yellow-100 text-yellow-800">पेंडिंग...</div>
+                    </div>
+                `;
+                fileRows.push({ file, rowId });
             }
+
+            // Process files one by one or in small batches for real-time visual feedback
+            for (let i = 0; i < fileRows.length; i++) {
+                const { file, rowId } = fileRows[i];
+                const rowElement = document.getElementById(rowId);
+                const statusBadge = rowElement.querySelector('.status-badge');
+                const idText = rowElement.querySelector('.property-id-text');
+
+                statusBadge.className = "status-badge px-3 py-1 rounded text-xs font-bold bg-blue-100 text-blue-800 animate-pulse";
+                statusBadge.textContent = "अपलोड हो रहा है...";
+
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    const response = await fetch('/upload-single', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        idText.textContent = `ID: ${result.property_id}`;
+                        statusBadge.className = "status-badge px-3 py-1 rounded text-xs font-bold bg-green-100 text-green-800";
+                        statusBadge.textContent = "सफल ✔";
+                    } else {
+                        statusBadge.className = "status-badge px-3 py-1 rounded text-xs font-bold bg-red-100 text-red-800";
+                        statusBadge.textContent = "विफल ✖";
+                        idText.textContent = `एरर: ${result.detail || 'अज्ञात'}`;
+                    }
+                } catch (err) {
+                    statusBadge.className = "status-badge px-3 py-1 rounded text-xs font-bold bg-red-100 text-red-800";
+                    statusBadge.textContent = "त्रुटि ✖";
+                }
+            }
+
+            uploadBtn.disabled = false;
+            uploadBtn.classList.remove('opacity-50');
+            alert('सभी फाइलों का लाइव अपलोड प्रोसेस पूरा हो गया है!');
         }
     </script>
 </body>
