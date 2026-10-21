@@ -47,7 +47,7 @@
     </div>
 
     <script>
-        let parsedListings = [];
+        let cachedListings = [];
 
         document.getElementById('upload-form').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -69,11 +69,10 @@
                 const result = await response.json();
                 
                 if(response.ok) {
-                    parsedListings = result.listings;
+                    cachedListings = result.listings; // Global variable mein data save karna
                     document.getElementById('total-count').textContent = `कुल लिस्टिंग: ${result.total}`;
                     document.getElementById('result-section').classList.remove('hidden');
                     
-                    // Show found IDs initially
                     const container = document.getElementById('ids-container');
                     container.innerHTML = '';
                     result.listings.forEach((item, idx) => {
@@ -91,6 +90,11 @@
         });
 
         async function uploadToDynamoDB() {
+            if (!cachedListings || cachedListings.length === 0) {
+                alert('कोई लिस्टिंग उपलब्ध नहीं है। कृपया पहले ज़िप फाइल दोबारा अपलोड करें।');
+                return;
+            }
+
             const btn = document.getElementById('upload-db-btn');
             const spinner = document.getElementById('loading-spinner');
             const successBox = document.getElementById('success-box');
@@ -103,7 +107,7 @@
                 const response = await fetch('/upload-dynamodb', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ listings: parsedListings })
+                    body: JSON.stringify({ listings: cachedListings })
                 });
 
                 const result = await response.json();
@@ -111,14 +115,13 @@
                     successBox.textContent = result.message;
                     successBox.classList.remove('hidden');
 
-                    // Show successfully uploaded property IDs in exact lines
                     const container = document.getElementById('ids-container');
                     container.innerHTML = '<div class="text-green-600 font-bold mb-2">✓ DynamoDB में सफलतापूर्वक सेव हुई आईडीज़:</div>';
                     result.saved_ids.forEach((id, idx) => {
                         container.innerHTML += `<div class="text-green-700">✔ ${idx+1}. ${id}</div>`;
                     });
                 } else {
-                    alert('अपलोड असफल: ' + result.detail);
+                    alert('अपलोड असफल: ' + (result.detail || 'अज्ञात त्रुटि'));
                 }
             } catch(err) {
                 alert('त्रुटि: ' + err.message);
