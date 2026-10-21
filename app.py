@@ -20,7 +20,16 @@ REGION = "ap-south-1"
 TABLE_NAME = "LARGE_PROPERTY_LISTING"
 PRIMARY_KEY = "property_id"
 
-executor = ThreadPoolExecutor(max_workers=20) # सुपरफास्ट मल्टीथ्रेडिंग
+executor = ThreadPoolExecutor(max_workers=20)
+
+def remove_none_values(d):
+    """ DynamoDB के लिए dictionary से None (null) वैल्यूज़ को हटाने का फंक्शन """
+    if isinstance(d, dict):
+        return {k: remove_none_values(v) for k, v in d.items() if v is not None}
+    elif isinstance(d, list):
+        return [remove_none_values(v) for v in d if v is not None]
+    else:
+        return d
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -45,10 +54,13 @@ async def parse_zip(zippfile: UploadFile = File(...)):
                             prop_id = filename.split('_')[1].split('.')[0] if '_' in filename else str(uuid.uuid4())
                             data[PRIMARY_KEY] = prop_id
 
+                        # None (null) वैल्यूज़ को साफ़ करना ताकि DynamoDB एरर न दे
+                        cleaned_data = remove_none_values(data)
+
                         listings.append({
                             "filename": filename,
                             "property_id": str(prop_id),
-                            "data": data
+                            "data": cleaned_data
                         })
                     except Exception as e:
                         print(f"Error parsing {filename}: {e}")
@@ -84,7 +96,6 @@ async def upload_dynamodb(payload: dict):
             print(f"Failed {item_info['filename']}: {ex}")
             return None
 
-    # एक साथ कई थ्रेड्स पर सुपरफास्ट पुट आइटम रिक्वेस्ट भेजना
     loop = asyncio.get_running_loop()
     tasks = [loop.run_in_executor(executor, save_item, item) for item in listings]
     results = await asyncio.gather(*tasks)
