@@ -1,87 +1,100 @@
 import os
+import zipfile
+import io
 import json
-from decimal import Decimal
-from flask import Flask, render_template, request, jsonify
+import uuid
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import boto3
+from fastapi import FastAPI, UploadFile, File, Request, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
 
-app = Flask(__name__)
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
 
-# AWS Configuration using Environment Variables
-# Agar environment variable set nahi hai, toh default region 'ap-south-1' use hoga
-AWS_REGION = os.environ.get("AWS_REGION", "ap-south-1")
-TABLE_NAME = os.environ.get("TABLE_NAME", "BUY_PROPERTY")
+# आपके डायनेमोडीबी क्रेडेंशियल्स
+AWS_ACCESS_KEY_ID = "AKIA32VVAONMQV5QKNED"
+AWS_SECRET_ACCESS_KEY = "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"
+REGION = "ap-south-1"
+TABLE_NAME = "LARGE_PROPERTY_LISTING"
+PRIMARY_KEY = "property_id"
 
-# Best Practice: Access Key aur Secret Key ko hardcode na karein.
-# Boto3 apne aap environment variables (AWS_ACCESS_KEY_ID aur AWS_SECRET_ACCESS_KEY) 
-# ya EC2/Lambda IAM Roles se credentials utha leta hai.
-aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
-aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+executor = ThreadPoolExecutor(max_workers=20) # सुपरफास्ट मल्टीथ्रेडिंग
 
-# DynamoDB Resource initialization
-if aws_access_key_id and aws_secret_access_key:
-    dynamodb = boto3.resource(
-        'dynamodb',
-        region_name=AWS_REGION,
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key
-    )
-else:
-    # Agar keys explicitly pass nahi karni, toh boto3 default credential chain use karega
-    dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
-table = dynamodb.Table(TABLE_NAME)
+@app.post("/parse-zip")
+async def parse_zip(zippfile: UploadFile = File(...)):
+    contents = await zippfile.read()
+    listings = []
 
-# DynamoDB ke Decimal डेटा को JSON में बदलने के लिए हेल्पर फंक्शन
-def decimal_default(obj):
-    if isinstance(obj, Decimal):
-        return float(obj) if obj % 1 != 0 else int(obj)
-    raise TypeError
-
-def get_all_properties():
     try:
-        response = table.scan()
-        items = response.get('Items', [])
-        # Decimal वैल्यूज को सामान्य नंबर में बदलना ताकि JSON एरर न आए
-        items_str = json.dumps(items, default=decimal_default)
-        return json.loads(items_str)
+        with zipfile.ZipFile(io.BytesIO(contents), 'r') as z:
+            for filename in z.namelist():
+                if filename.endswith('.json') and not filename.startswith('__MACOSX'):
+                    file_bytes = z.read(filename)
+                    try:
+                        data = json.loads(file_bytes.decode('utf-8'))
+                        
+                        # प्रॉपर्टी आईडी खोजना या फाइल नाम से बनाना
+                        prop_id = data.get(PRIMARY_KEY)
+                        if not prop_id:
+                            prop_id = filename.split('_')[1].split('.')[0] if '_' in filename else str(uuid.uuid4())
+                            data[PRIMARY_KEY] = prop_id
+
+                        listings.append({
+                            "filename": filename,
+                            "property_id": str(prop_id),
+                            "data": data
+                        })
+                    except Exception as e:
+                        print(f"Error parsing {filename}: {e}")
+    except Exception as ex:
+        raise HTTPException(status_code=400, detail=f"Invalid ZIP file: {str(ex)}")
+
+    return {"total": len(listings), "listings": listings}
+
+@app.post("/upload-dynamodb")
+async def upload_dynamodb(payload: dict):
+    listings = payload.get("listings", [])
+    if not listings:
+        raise HTTPException(status_code=400, detail="No listings found to upload.")
+
+    try:
+        dynamodb = boto3.resource(
+            'dynamodb',
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            region_name=REGION
+        )
+        table = dynamodb.Table(TABLE_NAME)
     except Exception as e:
-        print("DynamoDB Scan Error:", e)
-        return []
+        raise HTTPException(status_code=400, detail=f"DynamoDB connection failed: {str(e)}")
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+    saved_ids = []
 
-@app.route('/api/search', methods=['GET'])
-def search_properties():
-    query = request.args.get('q', '').lower().strip()
-    properties = get_all_properties()
-    results = []
-    
-    for prop in properties:
-        loc = prop.get('location', {})
-        locality = str(loc.get('locality', '')).lower()
-        city = str(loc.get('city', '')).lower()
-        full_address = str(loc.get('full_address', '')).lower()
-        title = str(prop.get('title', '')).lower()
-        property_id = str(prop.get('property_id', '')).lower()
-        
-        if (not query or 
-            query in locality or 
-            query in city or 
-            query in full_address or 
-            query in title or
-            query in property_id):
-            results.append(prop)
-            
-    return jsonify(results)
+    def save_item(item_info):
+        try:
+            table.put_item(Item=item_info["data"])
+            return item_info["property_id"]
+        except Exception as ex:
+            print(f"Failed {item_info['filename']}: {ex}")
+            return None
 
-@app.route('/property/<property_id>')
-def property_detail(property_id):
-    properties = get_all_properties()
-    prop = next((p for p in properties if str(p.get('property_id')) == str(property_id)), None)
-    return render_template('detail.html', property=prop)
+    # एक साथ कई थ्रेड्स पर सुपरफास्ट पुट आइटम रिक्वेस्ट भेजना
+    loop = asyncio.get_running_loop()
+    tasks = [loop.run_in_executor(executor, save_item, item) for item in listings]
+    results = await asyncio.gather(*tasks)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+    for pid in results:
+        if pid:
+            saved_ids.append(pid)
+
+    return {
+        "message": f"सफलतापूर्वक {len(saved_ids)} लिस्टिंग DynamoDB टेबल '{TABLE_NAME}' में सेव हो गई हैं!",
+        "saved_ids": saved_ids
+    }
     
