@@ -38,8 +38,19 @@ async def index(request: Request):
 async def upload_single(file: UploadFile = File(...)):
     try:
         content = await file.read()
-        data = json.loads(content.decode('utf-8'))
+        raw_data = json.loads(content.decode('utf-8'))
         
+        # यदि JSON रूट लिस्ट है (जैसे [...]), तो उसका पहला डिक्शनरी आइटम लें
+        if isinstance(raw_data, list):
+            if len(raw_data) > 0 and isinstance(raw_data[0], dict):
+                data = raw_data[0]
+            else:
+                raise HTTPException(status_code=400, detail="Invalid JSON list structure")
+        elif isinstance(raw_data, dict):
+            data = raw_data
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported JSON format")
+
         # प्रॉपर्टी आईडी निकालना या फाइल नाम से जनरेट करना
         filename = file.filename
         prop_id = data.get(PRIMARY_KEY)
