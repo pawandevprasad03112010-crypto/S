@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# आपके AWS और DynamoDB क्रेडेंशियल्स
+# Aapke AWS aur DynamoDB credentials
 AWS_ACCESS_KEY_ID = "AKIA32VVAONMQV5QKNED"
 AWS_SECRET_ACCESS_KEY = "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"
 REGION = "ap-south-1"
@@ -18,7 +18,7 @@ TABLE_NAME = "LARGE_PROPERTY_LISTING"
 PRIMARY_KEY = "property_id"
 
 def clean_and_convert_data(obj):
-    """ None वैल्यूज़ को हटाना और float को Decimal में बदलना ताकि DynamoDB एक्सेप्ट करे """
+    """ None values ko hatana aur float ko Decimal mein badalna taaki DynamoDB accept kare """
     if isinstance(obj, list):
         return [clean_and_convert_data(v) for v in obj if v is not None]
     elif isinstance(obj, dict):
@@ -40,7 +40,7 @@ async def upload_single(file: UploadFile = File(...)):
         content = await file.read()
         raw_data = json.loads(content.decode('utf-8'))
         
-        # यदि JSON रूट लिस्ट है (जैसे [...]), तो उसका पहला डिक्शनरी आइटम लें
+        # Yadi JSON root list hai (jaise [...]), toh uska pehla dictionary item lein
         if isinstance(raw_data, list):
             if len(raw_data) > 0 and isinstance(raw_data[0], dict):
                 data = raw_data[0]
@@ -51,7 +51,7 @@ async def upload_single(file: UploadFile = File(...)):
         else:
             raise HTTPException(status_code=400, detail="Unsupported JSON format")
 
-        # प्रॉपर्टी आईडी निकालना या फाइल नाम से जनरेट करना
+        # Property ID nikalna ya file naam se generate karna
         filename = file.filename
         prop_id = data.get(PRIMARY_KEY)
         if not prop_id:
@@ -60,10 +60,10 @@ async def upload_single(file: UploadFile = File(...)):
         else:
             data[PRIMARY_KEY] = str(prop_id)
 
-        # डेटा क्लीनिंग
+        # Data cleaning
         cleaned_data = clean_and_convert_data(data)
 
-        # DynamoDB कनेक्शन और पुट आइटम
+        # DynamoDB connection aur put item
         dynamodb = boto3.resource(
             'dynamodb',
             aws_access_key_id=AWS_ACCESS_KEY_ID,
