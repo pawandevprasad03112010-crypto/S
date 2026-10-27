@@ -1,6 +1,6 @@
 import os
 import json
-import uuid
+import random
 from decimal import Decimal
 import boto3
 from fastapi import FastAPI, UploadFile, File, Request, HTTPException
@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# Aapke AWS aur DynamoDB credentials
+# आपके AWS और DynamoDB क्रेडेंशियल्स
 AWS_ACCESS_KEY_ID = "AKIA32VVAONMQV5QKNED"
 AWS_SECRET_ACCESS_KEY = "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"
 REGION = "ap-south-1"
@@ -18,7 +18,7 @@ TABLE_NAME = "LARGE_PROPERTY_LISTING"
 PRIMARY_KEY = "property_id"
 
 def clean_and_convert_data(obj):
-    """ None values ko hatana aur float ko Decimal mein badalna taaki DynamoDB accept kare """
+    """ None वैल्यूज़ को हटाना और float को Decimal में बदलना ताकि DynamoDB एक्सेप्ट करे """
     if isinstance(obj, list):
         return [clean_and_convert_data(v) for v in obj if v is not None]
     elif isinstance(obj, dict):
@@ -38,32 +38,33 @@ async def index(request: Request):
 async def upload_single(file: UploadFile = File(...)):
     try:
         content = await file.read()
-        raw_data = json.loads(content.decode('utf-8'))
         
-        # Yadi JSON root list hai (jaise [...]), toh uska pehla dictionary item lein
+        try:
+            raw_data = json.loads(content.decode('utf-8'))
+        except Exception as json_err:
+            raise HTTPException(status_code=400, detail="Invalid JSON format in file")
+        
+        # यदि JSON रूट लिस्ट है (जैसे [...]), तो उसका पहला डिक्शनरी आइटम लें
         if isinstance(raw_data, list):
             if len(raw_data) > 0 and isinstance(raw_data[0], dict):
                 data = raw_data[0]
             else:
-                raise HTTPException(status_code=400, detail="Invalid JSON list structure")
+                raise HTTPException(status_code=400, detail="Empty or invalid JSON list")
         elif isinstance(raw_data, dict):
             data = raw_data
         else:
-            raise HTTPException(status_code=400, detail="Unsupported JSON format")
+            raise HTTPException(status_code=400, detail="Unsupported JSON structure")
 
-        # Property ID nikalna ya file naam se generate karna
-        filename = file.filename
-        prop_id = data.get(PRIMARY_KEY)
-        if not prop_id:
-            prop_id = filename.split('_')[1].split('.')[0] if '_' in filename else str(uuid.uuid4())
-            data[PRIMARY_KEY] = str(prop_id)
-        else:
-            data[PRIMARY_KEY] = str(prop_id)
+        # 🚀 हर बार अपलोड होने पर खुद से एक रैंडम 8-अंकों की प्रॉपर्टी आईडी जनरेट करना
+        prop_id = str(random.randint(10000000, 99999999))
+                
+        # डेटा के अंदर नया रैंडम property_id सेट करना (पुराना या JSON वाला ओवरराइट हो जाएगा)
+        data[PRIMARY_KEY] = prop_id
 
-        # Data cleaning
+        # डेटा क्लीनिंग (Decimal और None कन्वर्ट करना)
         cleaned_data = clean_and_convert_data(data)
 
-        # DynamoDB connection aur put item
+        # DynamoDB कनेक्शन और सेव करना
         dynamodb = boto3.resource(
             'dynamodb',
             aws_access_key_id=AWS_ACCESS_KEY_ID,
@@ -73,9 +74,10 @@ async def upload_single(file: UploadFile = File(...)):
         table = dynamodb.Table(TABLE_NAME)
         table.put_item(Item=cleaned_data)
 
-        return {"success": True, "property_id": str(prop_id), "filename": filename}
+        print(f"Successfully generated & uploaded Random Property ID: {prop_id} to {TABLE_NAME}")
+        return {"success": True, "property_id": prop_id, "filename": file.filename}
 
     except Exception as ex:
-        print(f"Error uploading {file.filename}: {str(ex)}")
+        print(f"❌ Error uploading {file.filename}: {str(ex)}")
         raise HTTPException(status_code=400, detail=str(ex))
         
