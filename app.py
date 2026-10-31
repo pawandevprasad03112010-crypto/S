@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 # आपकी Test API Keys
 RAZORPAY_KEY_ID = "rzp_test_TuSHYJk4OvQwda"
-RAZORPAY_KEY_SECRET = "TC7QeoZfv6A01BU5pD21zlwx"
+RAZORPAY_KEY_SECRET = "TC7QeoZfv6AO1BU5pD21zlwx"
 
 @app.route('/')
 def index():
